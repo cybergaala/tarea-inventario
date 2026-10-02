@@ -58,6 +58,10 @@ final class DefaultInventoryService implements InventoryService {
         if (!policy.allows(quantity)) {
             throw new OrderLimitExceededException(sku, quantity, policy.maxUnitsPerOrder());
         }
+        String boundSku = store.bindOrder(orderId, sku);
+        if (!boundSku.equals(sku)) {
+            throw new IllegalArgumentException("Order " + orderId + " already reserves " + boundSku);
+        }
         return product.reserve(orderId, quantity, clock.instant().plus(policy.paymentWindow()));
     }
 

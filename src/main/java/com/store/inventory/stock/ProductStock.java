@@ -39,7 +39,19 @@ public final class ProductStock {
         onHand = Math.addExact(onHand, quantity);
     }
 
+    /**
+     * Reserves units for an order. A retry of an order that is already reserved returns the
+     * existing reservation instead of reserving twice (the app resends on slow connections).
+     */
     public synchronized Reservation reserve(String orderId, int quantity, Instant expiresAt) {
+        Reservation existing = reservations.get(orderId);
+        if (existing != null) {
+            if (existing.quantity() != quantity) {
+                throw new IllegalArgumentException("Order " + orderId + " already reserved "
+                        + existing.quantity() + " units of " + sku + ", requested " + quantity);
+            }
+            return existing;
+        }
         int available = available();
         if (quantity > available) {
             throw new InsufficientStockException(sku, quantity, available);
