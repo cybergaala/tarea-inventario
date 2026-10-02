@@ -63,3 +63,34 @@ Requiere Java 21 y Maven.
 ## Entrega
 
 Compártenos un repositorio con el proyecto completo.
+
+---
+
+## Arquitectura
+
+Librería Java 21 sin dependencias de producción. Paquetes por feature:
+
+```
+com.store.inventory
+├── Inventory                 punto de entrada: conecta las piezas
+├── DefaultInventoryService   orquesta: valida, aplica la política, avisa
+├── api/                      contrato (no se modifica)
+├── catalog/                  CategoryPolicies: tabla de reglas por categoría
+├── stock/                    ProductStock (lock por SKU, reservas, expiración), InventoryStore
+└── alert/                    LowStockTracker: avisar una vez hasta reabastecer
+```
+
+Flujo de `reserve(orderId, sku, qty)`:
+
+1. Valida datos → límite de la categoría → vincula `orderId` al SKU.
+2. Bajo el lock del producto: libera reservas vencidas (según el `Clock`), devuelve la existente si es un reintento, o reserva si hay stock.
+3. Fuera del lock: si quedan 5 o menos y no se avisó desde el último reabastecimiento, avisa a `StockAlertListener`.
+
+Supuestos, alcance y lo que cambiaría para producción (BD, varias instancias): [`DECISIONS.md`](DECISIONS.md).
+
+## Flujo de trabajo con IA
+
+- `CLAUDE.md`: reglas del contrato y convenciones para cualquier asistente (o persona) que trabaje aquí.
+- `.claude/settings.json` + `.claude/hooks/protect-api.sh`: bloquean ediciones de la IA en `api/`.
+- Gitflow con una rama y un PR por feature, Conventional Commits y `mvn test` en verde antes de cada merge.
+- Detalle de qué se delegó y qué se revisó: [`DECISIONS.md` → Uso de IA](DECISIONS.md#uso-de-ia).
