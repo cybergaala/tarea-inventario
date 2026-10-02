@@ -5,22 +5,30 @@ import com.store.inventory.api.InventoryService;
 import com.store.inventory.api.OrderLimitExceededException;
 import com.store.inventory.api.ProductCategory;
 import com.store.inventory.api.Reservation;
+import com.store.inventory.api.StockAlertListener;
 import com.store.inventory.catalog.CategoryPolicies;
 import com.store.inventory.catalog.CategoryPolicy;
 import com.store.inventory.stock.InventoryStore;
 import com.store.inventory.stock.ProductStock;
+import java.lang.System.Logger;
+import java.lang.System.Logger.Level;
 import java.time.Clock;
 
 final class DefaultInventoryService implements InventoryService {
 
+    private static final Logger LOG = System.getLogger(DefaultInventoryService.class.getName());
+
     private final InventoryStore store;
     private final CategoryPolicies policies;
     private final Clock clock;
+    private final StockAlertListener alertListener;
 
-    DefaultInventoryService(InventoryStore store, CategoryPolicies policies, Clock clock) {
+    DefaultInventoryService(InventoryStore store, CategoryPolicies policies, Clock clock,
+            StockAlertListener alertListener) {
         this.store = store;
         this.policies = policies;
         this.clock = clock;
+        this.alertListener = alertListener;
     }
 
     @Override
@@ -39,7 +47,9 @@ final class DefaultInventoryService implements InventoryService {
 
     @Override
     public void addStock(String sku, int quantity) {
-        product(sku).add(quantity);
+        ProductStock product = product(sku);
+        product.add(quantity);
+        notifyIfLowStock(product);
     }
 
     @Override
@@ -62,7 +72,9 @@ final class DefaultInventoryService implements InventoryService {
         if (!boundSku.equals(sku)) {
             throw new IllegalArgumentException("Order " + orderId + " already reserves " + boundSku);
         }
-        return product.reserve(orderId, quantity, clock.instant(), policy.paymentWindow());
+        Reservation reservation = product.reserve(orderId, quantity, clock.instant(), policy.paymentWindow());
+        notifyIfLowStock(product);
+        return reservation;
     }
 
     @Override
@@ -77,6 +89,18 @@ final class DefaultInventoryService implements InventoryService {
     @Override
     public int available(String sku) {
         return sku == null ? 0 : store.find(sku).map(product -> product.available(clock.instant())).orElse(0);
+    }
+
+    // Runs outside the product lock: a slow channel (e.g. email) never blocks reservations.
+    private void notifyIfLowStock(ProductStock product) {
+        product.claimLowStockAlert(clock.instant()).ifPresent(available -> {
+            try {
+                alertListener.onLowStock(product.sku(), available);
+            } catch (RuntimeException e) {
+                // The reservation already happened; a failing channel must not undo it or reach the customer.
+                LOG.log(Level.ERROR, "Low stock alert failed for " + product.sku(), e);
+            }
+        });
     }
 
     private ProductStock product(String sku) {

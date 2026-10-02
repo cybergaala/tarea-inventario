@@ -1,5 +1,6 @@
 package com.store.inventory.stock;
 
+import com.store.inventory.alert.LowStockTracker;
 import com.store.inventory.api.InsufficientStockException;
 import com.store.inventory.api.ProductCategory;
 import com.store.inventory.api.Reservation;
@@ -8,6 +9,7 @@ import java.time.Instant;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.OptionalInt;
 import java.util.PriorityQueue;
 
 /**
@@ -27,6 +29,7 @@ public final class ProductStock {
     private final Map<String, Reservation> confirmed = new HashMap<>();
     private final PriorityQueue<Reservation> byExpiry =
             new PriorityQueue<>(Comparator.comparing(Reservation::expiresAt));
+    private final LowStockTracker lowStock = new LowStockTracker();
     private int onHand;
     private int reserved;
 
@@ -48,6 +51,7 @@ public final class ProductStock {
             throw new IllegalArgumentException("Quantity must be positive, got " + quantity);
         }
         onHand = Math.addExact(onHand, quantity);
+        lowStock.restocked();
     }
 
     /**
@@ -94,6 +98,15 @@ public final class ProductStock {
     public synchronized int available(Instant now) {
         releaseExpired(now);
         return onHand - reserved;
+    }
+
+    /**
+     * Claims the low stock alert for the current availability, if one is due. Only one caller
+     * ever gets it until the next restock, so the alert can be sent outside this lock.
+     */
+    public synchronized OptionalInt claimLowStockAlert(Instant now) {
+        int available = available(now);
+        return lowStock.shouldAlert(available) ? OptionalInt.of(available) : OptionalInt.empty();
     }
 
     private void releaseExpired(Instant now) {
