@@ -5,7 +5,7 @@ Supuestos, alcance y pendientes del servicio de reservas. Se actualiza en cada f
 ## Diseño
 
 - **Librería Java pura, sin framework.** El contrato es `Inventory.create(Clock, StockAlertListener)` y los tests lo usan directamente. Una capa REST/Spring no aporta a lo que se pide y agrega superficie de revisión.
-- **Paquetes por feature:** `catalog` (reglas por categoría), `stock` (stock y reservas de un producto, almacenamiento). `Inventory` solo conecta las piezas; `DefaultInventoryService` orquesta.
+- **Paquetes por feature:** `catalog` (reglas por categoría), `stock` (stock y reservas de un producto, almacenamiento), `alert` (cuándo avisar de stock bajo). `Inventory` solo conecta las piezas; `DefaultInventoryService` orquesta.
 - **Reglas por categoría en una sola tabla** (`CategoryPolicies.defaults()`). Agregar una categoría = una línea. Si falta la política de alguna categoría del enum, falla al crear el servicio y falla `CategoryPoliciesTest`.
 - **Almacenamiento detrás de un puerto** (`InventoryStore`), implementado en memoria. Es la única interfaz con una sola implementación del proyecto; se justifica porque el README anuncia la migración a base de datos.
 
@@ -32,6 +32,14 @@ Supuestos, alcance y pendientes del servicio de reservas. Se actualiza en cada f
 - **`confirm` sigue el contrato al pie de la letra:** sin reserva activa (pedido desconocido, vencido, fallido o ya confirmado) lanza `IllegalStateException`. Un segundo `confirm` del mismo pedido también falla: la reserva ya no está activa. Si el sistema de pagos reintenta, debe tratar esa excepción como "ya confirmado"; alternativa discutible con el equipo.
 - **Confirmar descuenta las unidades del stock** (`onHand`) y saca la reserva de las activas. Las unidades vendidas nunca vuelven, aunque pase la ventana de pago.
 - **Un `reserve` tardío de un pedido ya pagado** devuelve la reserva confirmada sin reservar de nuevo. Para eso los pedidos confirmados se guardan en memoria sin límite; en BD se resolvería con una tabla de pedidos y su estado.
+
+### Avisos de stock bajo
+- **Umbral:** se avisa cuando las unidades disponibles quedan en 5 o menos (`LowStockTracker.THRESHOLD`), con la cifra actual.
+- **Un solo aviso hasta reabastecer:** solo `addStock` cuenta como reabastecimiento y rearma el aviso. Que vuelvan unidades por reservas vencidas no es reabastecer, así que no se repite el aviso.
+- **Reabastecer y seguir en 5 o menos** vuelve a avisar con la nueva cifra: hubo reabastecimiento y compras sigue necesitando saberlo. Lo mismo aplica al primer `addStock` de un producto nuevo con poco stock.
+- **El aviso se envía fuera del lock del producto:** el producto decide bajo su lock quién "reclama" el aviso (exactamente uno) y el envío ocurre después. Un canal lento, como el correo, no frena las reservas.
+- **Un canal que falla no rompe la reserva:** se registra el error y la reserva sigue. Costo: ese aviso se pierde. En producción se resolvería con un outbox y reintentos.
+- **Multicanal:** `StockAlertListener` ya es el punto de extensión. Para correo + Slack basta un listener que reparta a varios; no lo agregué porque hoy hay un solo canal.
 
 ## Fuera de alcance
 
