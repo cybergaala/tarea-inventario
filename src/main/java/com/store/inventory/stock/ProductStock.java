@@ -60,7 +60,10 @@ public final class ProductStock {
      */
     public synchronized Reservation reserve(String orderId, int quantity, Instant now, Duration paymentWindow) {
         releaseExpired(now);
-        Reservation existing = reservations.getOrDefault(orderId, confirmed.get(orderId));
+        Reservation existing = reservations.get(orderId);
+        if (existing == null) {
+            existing = confirmed.get(orderId);
+        }
         if (existing != null) {
             if (existing.quantity() != quantity) {
                 throw new IllegalArgumentException("Order " + orderId + " already reserved "
