@@ -25,7 +25,8 @@ public final class ProductStock {
     private final String sku;
     private final ProductCategory category;
     private final Map<String, Reservation> reservations = new HashMap<>();
-    // ponytail: kept forever so late retries of paid orders are recognized; move to the DB with a TTL.
+    // Never cleared, so a late retry of a paid order is still recognized. With a database,
+    // this moves to the reservations table with a retention period (see DECISIONS.md).
     private final Map<String, Reservation> confirmed = new HashMap<>();
     private final PriorityQueue<Reservation> byExpiry =
             new PriorityQueue<>(Comparator.comparing(Reservation::expiresAt));
