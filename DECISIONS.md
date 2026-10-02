@@ -38,7 +38,7 @@ Supuestos, alcance y pendientes del servicio de reservas. Se actualiza en cada f
 - **Un solo aviso hasta reabastecer:** solo `addStock` cuenta como reabastecimiento y rearma el aviso. Que vuelvan unidades por reservas vencidas no es reabastecer, así que no se repite el aviso.
 - **Reabastecer y seguir en 5 o menos** vuelve a avisar con la nueva cifra: hubo reabastecimiento y compras sigue necesitando saberlo. Lo mismo aplica al primer `addStock` de un producto nuevo con poco stock.
 - **El aviso se envía fuera del lock del producto:** el producto decide bajo su lock quién "reclama" el aviso (exactamente uno) y el envío ocurre después. Un canal lento, como el correo, no frena las reservas.
-- **Un canal que falla no rompe la reserva:** se registra el error y la reserva sigue. Costo: ese aviso se pierde. En producción se resolvería con un outbox y reintentos.
+- **Un canal que falla no rompe la reserva:** se registra el error, la reserva sigue y el aviso se libera para que la siguiente operación del producto (`reserve` o `addStock`) lo reintente. Costo: si no hay más operaciones, el aviso no llega. En producción se resolvería con un outbox y reintentos.
 - **Multicanal:** `StockAlertListener` ya es el punto de extensión. Para correo + Slack basta un listener que reparta a varios; no lo agregué porque hoy hay un solo canal.
 
 ### Concurrencia
