@@ -67,7 +67,11 @@ final class DefaultInventoryService implements InventoryService {
 
     @Override
     public void confirm(String orderId) {
-        throw new UnsupportedOperationException("TODO");
+        ProductStock product = (orderId == null ? null : store.skuOfOrder(orderId).flatMap(store::find).orElse(null));
+        if (product == null) {
+            throw new IllegalStateException("Order " + orderId + " has no active reservation");
+        }
+        product.confirm(orderId, clock.instant());
     }
 
     @Override
