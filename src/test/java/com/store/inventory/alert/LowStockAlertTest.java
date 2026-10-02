@@ -12,6 +12,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -105,6 +106,24 @@ class LowStockAlertTest {
 
         assertEquals(5, withBrokenChannel.reserve("O-1", "STD", 5).quantity());
         assertEquals(5, withBrokenChannel.available("STD"));
+    }
+
+    @Test
+    void failedAlertIsRetriedOnNextOperation() {
+        List<Alert> delivered = new CopyOnWriteArrayList<>();
+        AtomicBoolean down = new AtomicBoolean(true);
+        InventoryService withFlakyChannel = Inventory.create(clock, (sku, available) -> {
+            if (down.getAndSet(false)) {
+                throw new IllegalStateException("mail server down");
+            }
+            delivered.add(new Alert(sku, available));
+        });
+        withFlakyChannel.registerProduct("STD", ProductCategory.STANDARD);
+        withFlakyChannel.addStock("STD", 10);
+
+        withFlakyChannel.reserve("O-1", "STD", 5);
+        withFlakyChannel.reserve("O-2", "STD", 1);
+        assertEquals(List.of(new Alert("STD", 4)), delivered);
     }
 
     @Test
