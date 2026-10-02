@@ -23,6 +23,8 @@ public final class ProductStock {
     private final String sku;
     private final ProductCategory category;
     private final Map<String, Reservation> reservations = new HashMap<>();
+    // ponytail: kept forever so late retries of paid orders are recognized; move to the DB with a TTL.
+    private final Map<String, Reservation> confirmed = new HashMap<>();
     private final PriorityQueue<Reservation> byExpiry =
             new PriorityQueue<>(Comparator.comparing(Reservation::expiresAt));
     private int onHand;
@@ -54,7 +56,7 @@ public final class ProductStock {
      */
     public synchronized Reservation reserve(String orderId, int quantity, Instant now, Duration paymentWindow) {
         releaseExpired(now);
-        Reservation existing = reservations.get(orderId);
+        Reservation existing = reservations.getOrDefault(orderId, confirmed.get(orderId));
         if (existing != null) {
             if (existing.quantity() != quantity) {
                 throw new IllegalArgumentException("Order " + orderId + " already reserved "
@@ -71,6 +73,22 @@ public final class ProductStock {
         byExpiry.add(reservation);
         reserved += quantity;
         return reservation;
+    }
+
+    /**
+     * Turns an active reservation into a sale: its units leave the warehouse for good.
+     *
+     * @throws IllegalStateException if the order has no active reservation (unknown, expired or already confirmed)
+     */
+    public synchronized void confirm(String orderId, Instant now) {
+        releaseExpired(now);
+        Reservation reservation = reservations.remove(orderId);
+        if (reservation == null) {
+            throw new IllegalStateException("Order " + orderId + " has no active reservation");
+        }
+        reserved -= reservation.quantity();
+        onHand -= reservation.quantity();
+        confirmed.put(orderId, reservation);
     }
 
     public synchronized int available(Instant now) {
