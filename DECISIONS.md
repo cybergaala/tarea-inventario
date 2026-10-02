@@ -7,7 +7,7 @@ Supuestos, alcance y pendientes del servicio de reservas. Se actualiza en cada f
 - **Librería Java pura, sin framework.** El contrato es `Inventory.create(Clock, StockAlertListener)` y los tests lo usan directamente. Una capa REST/Spring no aporta a lo que se pide y agrega superficie de revisión.
 - **Paquetes por feature:** `catalog` (reglas por categoría), `stock` (stock y reservas de un producto, almacenamiento), `alert` (cuándo avisar de stock bajo). `Inventory` solo conecta las piezas; `DefaultInventoryService` orquesta.
 - **Reglas por categoría en una sola tabla** (`CategoryPolicies.defaults()`). Agregar una categoría = una línea. Si falta la política de alguna categoría del enum, falla al crear el servicio y falla `CategoryPoliciesTest`.
-- **Almacenamiento detrás de un puerto** (`InventoryStore`), implementado en memoria. Es la única interfaz con una sola implementación del proyecto; se justifica porque el README anuncia la migración a base de datos.
+- **Almacenamiento detrás de una interfaz** (`InventoryStore`), implementada en memoria. Es la única interfaz con una sola implementación del proyecto: separa el "dónde vive el dato" del servicio. No es todavía un puerto listo para BD: devuelve objetos `ProductStock` vivos cuyo `synchronized` hace la concurrencia, y una BD no puede cumplir eso. El cambio real está en "Antes de llevarlo a producción".
 
 ## Supuestos
 
@@ -48,12 +48,35 @@ Supuestos, alcance y pendientes del servicio de reservas. Se actualiza en cada f
 
 ## Fuera de alcance
 
-_Se completa en la release._
+- **API REST, Spring, persistencia real.** El contrato es una librería; el README pide datos en memoria por ahora.
+- **Cancelar una reserva** antes de que venza (p. ej. el cliente abandona el carrito). El contrato no lo expone; hoy la unidad vuelve al vencer.
+- **Devoluciones o ajustes de inventario** (restar stock, mermas). El contrato solo tiene `addStock`.
+- **Varios canales de aviso.** `StockAlertListener` ya lo permite con un listener que reparta; no hay un segundo canal hoy.
+- **Umbral de stock bajo por producto o categoría.** Es fijo en 5 (`LowStockTracker.THRESHOLD`), como dice el README.
+- **Métricas y trazas** (reservas por segundo, vencimientos, avisos fallidos). Solo se registra en log el aviso que falla.
 
 ## Antes de llevarlo a producción
 
-_Se completa en la release._
+El README anuncia BD y varias instancias. Con eso el `synchronized` deja de proteger nada: dos instancias tienen dos copias del lock. Lo que cambiaría:
+
+1. **El lock pasa a la BD.** Reservar sería una sola sentencia atómica:
+   `UPDATE stock SET reserved = reserved + :q WHERE sku = :sku AND on_hand - reserved >= :q`
+   (0 filas = sin stock), o `SELECT ... FOR UPDATE` dentro de la transacción, u optimistic locking con columna `version` y reintento. Cualquiera de las tres reemplaza a `ProductStock` como lock; `InventoryStore` dejaría de devolver objetos vivos y pasaría a operaciones (`reserve`, `confirm`, `release`).
+2. **Tabla de reservas** con `order_id` como clave primaria (la idempotencia la da la restricción única, no un mapa), `status` (`ACTIVE`/`CONFIRMED`/`EXPIRED`) e índice por `expires_at`.
+3. **Expiración:** se puede mantener perezosa (filtrar `expires_at > now` en cada consulta) y sumar un job que libere en lote para que `reserved` no quede inflado en productos que nadie consulta.
+4. **Memoria sin límite que hoy existe:** el índice `orderId → sku` (`InMemoryInventoryStore.orderSkus`) y los pedidos confirmados (`ProductStock.confirmed`) nunca se borran. En BD pasan a la tabla de reservas con un TTL o archivado (p. ej. 30 días).
+5. **Avisos con outbox:** escribir el aviso en una tabla en la misma transacción que la reserva y que un proceso aparte lo envíe con reintentos. Hoy un canal que falla pierde el aviso. El estado "ya avisado" también pasa a la BD, si no cada instancia avisaría una vez.
+6. **Relojes:** con varias instancias, la hora de vencimiento debería venir de la BD (`now()`) o de relojes sincronizados, para que dos instancias no discrepen sobre si una reserva venció.
+7. **`confirm` repetido:** acordar con pagos si un segundo `confirm` debe ser idempotente en vez de lanzar `IllegalStateException`.
+8. **Acoplamiento `stock` → `alert`:** `ProductStock` guarda su `LowStockTracker` para decidir el aviso bajo el mismo lock. Con BD esa decisión se mueve a la transacción y el acoplamiento desaparece.
 
 ## Uso de IA
 
-_Se completa en la release._
+Usé Claude Code como par de programación, con reglas explícitas y revisión mía en cada paso:
+
+- **Guardrails en el repo:** `CLAUDE.md` del proyecto con las reglas del contrato y las convenciones, y un hook `PreToolUse` (`.claude/hooks/protect-api.sh`) que bloquea cualquier edición en `com.store.inventory.api`. La regla "no tocar el contrato" no depende de que la IA se acuerde.
+- **Plan antes de código:** primero un plan con los requisitos implícitos del README (idempotencia, expiración por `Clock`, orden de validaciones, concurrencia) y las ramas; lo aprobé y ajusté antes de escribir nada.
+- **Una rama por feature:** cada una con commits `feat` → `test` → `docs(decisions)`, `mvn test` en verde y un PR que yo revisé y mergeé en GitHub.
+- **Lo que decidí o descarté:** Spring/REST (scope creep), un listener compuesto para multicanal (YAGNI), y el commit de refactor de avisos del plan (los avisos ya salían fuera del lock).
+- **Revisión antes de la release:** una revisión de todo el código detectó que faltaba un test de concurrencia, que `InventoryStore` no es un puerto real de BD y que había memoria sin límite. Lo primero se resolvió en `feature/concurrency-safety`; lo demás está documentado arriba. Antes del merge a `main` corrí `/code-review` sobre `main...release/1.0.0`.
+- **Tests que pueden fallar:** el test de concurrencia se verificó quitando el `synchronized` y viéndolo fallar.
