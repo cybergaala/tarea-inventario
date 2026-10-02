@@ -28,6 +28,11 @@ Supuestos, alcance y pendientes del servicio de reservas. Se actualiza en cada f
 - **Cola por vencimiento** (`PriorityQueue`): liberar cuesta O(log n) por reserva vencida, no recorrer todas las reservas en cada llamada.
 - **Reintento después de vencer:** crea una reserva nueva si hay stock. La anterior ya no existe; tratar el reintento como pedido nuevo es lo menos sorprendente.
 
+### Confirmación
+- **`confirm` sigue el contrato al pie de la letra:** sin reserva activa (pedido desconocido, vencido, fallido o ya confirmado) lanza `IllegalStateException`. Un segundo `confirm` del mismo pedido también falla: la reserva ya no está activa. Si el sistema de pagos reintenta, debe tratar esa excepción como "ya confirmado"; alternativa discutible con el equipo.
+- **Confirmar descuenta las unidades del stock** (`onHand`) y saca la reserva de las activas. Las unidades vendidas nunca vuelven, aunque pase la ventana de pago.
+- **Un `reserve` tardío de un pedido ya pagado** devuelve la reserva confirmada sin reservar de nuevo. Para eso los pedidos confirmados se guardan en memoria sin límite; en BD se resolvería con una tabla de pedidos y su estado.
+
 ## Fuera de alcance
 
 _Se completa en la release._
