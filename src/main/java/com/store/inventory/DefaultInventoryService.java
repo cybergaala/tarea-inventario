@@ -1,17 +1,26 @@
 package com.store.inventory;
 
+import com.store.inventory.api.InsufficientStockException;
 import com.store.inventory.api.InventoryService;
+import com.store.inventory.api.OrderLimitExceededException;
 import com.store.inventory.api.ProductCategory;
 import com.store.inventory.api.Reservation;
+import com.store.inventory.catalog.CategoryPolicies;
+import com.store.inventory.catalog.CategoryPolicy;
 import com.store.inventory.stock.InventoryStore;
 import com.store.inventory.stock.ProductStock;
+import java.time.Clock;
 
 final class DefaultInventoryService implements InventoryService {
 
     private final InventoryStore store;
+    private final CategoryPolicies policies;
+    private final Clock clock;
 
-    DefaultInventoryService(InventoryStore store) {
+    DefaultInventoryService(InventoryStore store, CategoryPolicies policies, Clock clock) {
         this.store = store;
+        this.policies = policies;
+        this.clock = clock;
     }
 
     @Override
@@ -35,7 +44,21 @@ final class DefaultInventoryService implements InventoryService {
 
     @Override
     public Reservation reserve(String orderId, String sku, int quantity) {
-        throw new UnsupportedOperationException("TODO");
+        if (orderId == null || orderId.isBlank()) {
+            throw new IllegalArgumentException("Order id is required");
+        }
+        if (quantity <= 0) {
+            throw new IllegalArgumentException("Quantity must be positive, got " + quantity);
+        }
+        ProductStock product = (sku == null ? null : store.find(sku).orElse(null));
+        if (product == null) {
+            throw new InsufficientStockException(sku, quantity, 0);
+        }
+        CategoryPolicy policy = policies.of(product.category());
+        if (!policy.allows(quantity)) {
+            throw new OrderLimitExceededException(sku, quantity, policy.maxUnitsPerOrder());
+        }
+        return product.reserve(orderId, quantity, clock.instant().plus(policy.paymentWindow()));
     }
 
     @Override

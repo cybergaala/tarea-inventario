@@ -2,6 +2,7 @@ package com.store.inventory;
 
 import com.store.inventory.api.InventoryService;
 import com.store.inventory.api.StockAlertListener;
+import com.store.inventory.catalog.CategoryPolicies;
 import com.store.inventory.stock.InMemoryInventoryStore;
 import java.time.Clock;
 
@@ -15,6 +16,6 @@ public final class Inventory {
     }
 
     public static InventoryService create(Clock clock, StockAlertListener alertListener) {
-        return new DefaultInventoryService(new InMemoryInventoryStore());
+        return new DefaultInventoryService(new InMemoryInventoryStore(), CategoryPolicies.defaults(), clock);
     }
 }
