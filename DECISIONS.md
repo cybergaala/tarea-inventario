@@ -41,6 +41,11 @@ Supuestos, alcance y pendientes del servicio de reservas. Se actualiza en cada f
 - **Un canal que falla no rompe la reserva:** se registra el error y la reserva sigue. Costo: ese aviso se pierde. En producción se resolvería con un outbox y reintentos.
 - **Multicanal:** `StockAlertListener` ya es el punto de extensión. Para correo + Slack basta un listener que reparta a varios; no lo agregué porque hoy hay un solo canal.
 
+### Concurrencia
+- **Lock por SKU:** `ProductStock` es el lock (`synchronized`). Pedidos de productos distintos no se bloquean entre sí; los del mismo producto se serializan. Basta para una instancia; con varias, el lock tiene que pasar a la BD (ver "Antes de llevarlo a producción").
+- **Probado con hilos, no solo argumentado:** `ConcurrencyTest` lanza 200 pedidos a la vez sobre 50 unidades (exactamente 50 reservas, 0 disponibles, un solo aviso) y 200 reintentos simultáneos del mismo `orderId` (una sola reserva). Cada test se repite 20 veces porque una carrera no siempre aparece en la primera corrida. Verifiqué que sin `synchronized` en `reserve` ambos fallan (se venden 57–62 de 50).
+- **Hilos virtuales + un latch de salida:** todos los pedidos esperan la misma señal y pegan al servicio al mismo tiempo; con hilos virtuales 200 tareas no cuestan nada.
+
 ## Fuera de alcance
 
 _Se completa en la release._
