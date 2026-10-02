@@ -51,7 +51,7 @@ public final class ProductStock {
             throw new IllegalArgumentException("Quantity must be positive, got " + quantity);
         }
         onHand = Math.addExact(onHand, quantity);
-        lowStock.restocked();
+        lowStock.rearm();
     }
 
     /**
@@ -107,6 +107,11 @@ public final class ProductStock {
     public synchronized OptionalInt claimLowStockAlert(Instant now) {
         int available = available(now);
         return lowStock.shouldAlert(available) ? OptionalInt.of(available) : OptionalInt.empty();
+    }
+
+    /** Gives back a claimed alert that could not be delivered, so the next operation retries it. */
+    public synchronized void releaseLowStockAlert() {
+        lowStock.rearm();
     }
 
     private void releaseExpired(Instant now) {

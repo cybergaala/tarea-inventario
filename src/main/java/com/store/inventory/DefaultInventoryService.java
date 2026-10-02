@@ -99,6 +99,7 @@ final class DefaultInventoryService implements InventoryService {
             } catch (RuntimeException e) {
                 // The reservation already happened; a failing channel must not undo it or reach the customer.
                 LOG.log(Level.ERROR, "Low stock alert failed for " + product.sku(), e);
+                product.releaseLowStockAlert();
             }
         });
     }

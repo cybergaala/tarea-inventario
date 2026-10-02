@@ -19,7 +19,8 @@ public final class LowStockTracker {
         return true;
     }
 
-    public void restocked() {
+    /** Allows the next low availability to alert again: after a restock, or when sending the last alert failed. */
+    public void rearm() {
         alerted = false;
     }
 }
