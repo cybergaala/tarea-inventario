@@ -62,7 +62,7 @@ final class DefaultInventoryService implements InventoryService {
         if (!boundSku.equals(sku)) {
             throw new IllegalArgumentException("Order " + orderId + " already reserves " + boundSku);
         }
-        return product.reserve(orderId, quantity, clock.instant().plus(policy.paymentWindow()));
+        return product.reserve(orderId, quantity, clock.instant(), policy.paymentWindow());
     }
 
     @Override
@@ -72,7 +72,7 @@ final class DefaultInventoryService implements InventoryService {
 
     @Override
     public int available(String sku) {
-        return sku == null ? 0 : store.find(sku).map(ProductStock::available).orElse(0);
+        return sku == null ? 0 : store.find(sku).map(product -> product.available(clock.instant())).orElse(0);
     }
 
     private ProductStock product(String sku) {
