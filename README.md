@@ -76,15 +76,15 @@ com.store.inventory
 ├── DefaultInventoryService   orquesta: valida, aplica la política, avisa
 ├── api/                      contrato (no se modifica)
 ├── catalog/                  CategoryPolicies: tabla de reglas por categoría
-├── stock/                    ProductStock (lock por SKU, reservas, expiración), InventoryStore
+├── stock/                    ProductStock (bloqueo por SKU, reservas, expiración), InventoryStore
 └── alert/                    LowStockTracker: avisar una vez hasta reabastecer
 ```
 
 Flujo de `reserve(orderId, sku, qty)`:
 
 1. Valida datos → límite de la categoría → vincula `orderId` al SKU.
-2. Bajo el lock del producto: libera reservas vencidas (según el `Clock`), devuelve la existente si es un reintento, o reserva si hay stock.
-3. Fuera del lock: si quedan 5 o menos y no se avisó desde el último reabastecimiento, avisa a `StockAlertListener`.
+2. Bajo el bloqueo del producto: libera reservas vencidas (según el `Clock`), devuelve la existente si es un reintento, o reserva si hay stock.
+3. Fuera del bloqueo: si quedan 5 o menos y no se avisó desde el último reabastecimiento, avisa a `StockAlertListener`.
 
 Supuestos, alcance y lo que cambiaría para producción (BD, varias instancias): [`DECISIONS.md`](DECISIONS.md).
 
