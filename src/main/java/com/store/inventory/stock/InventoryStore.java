@@ -16,4 +16,13 @@ public interface InventoryStore {
     ProductStock putIfAbsent(ProductStock product);
 
     Optional<ProductStock> find(String sku);
+
+    /**
+     * Links an order to the product it reserves, unless the order is already linked.
+     *
+     * @return the SKU the order is linked to: the given one, or the one it already had
+     */
+    String bindOrder(String orderId, String sku);
+
+    Optional<String> skuOfOrder(String orderId);
 }
