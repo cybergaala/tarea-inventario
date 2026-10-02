@@ -12,7 +12,7 @@ Entry point: `Inventory.create(Clock, StockAlertListener)`.
 - The original tests in `InventoryServiceTest` must keep passing.
 
 ## Conventions
-- Package by feature: `catalog`, `stock`, `reservation`, `alert`. `Inventory` only wires them.
+- Package by feature: `catalog` (category rules), `stock` (products, reservations, storage), `alert` (low stock). `Inventory` only wires them; `DefaultInventoryService` orchestrates.
 - Time comes only from the injected `Clock`. Never call `Instant.now()` directly.
 - Category rules live in one table (`CategoryPolicies`). New category = one new entry + its test.
 - Must be thread-safe: concurrent orders on the same SKU must never oversell.
