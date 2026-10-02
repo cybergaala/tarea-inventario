@@ -5,6 +5,7 @@ import com.store.inventory.api.StockAlertListener;
 import com.store.inventory.catalog.CategoryPolicies;
 import com.store.inventory.stock.InMemoryInventoryStore;
 import java.time.Clock;
+import java.util.Objects;
 
 /**
  * Entry point used by our automated tests. Keep this signature exactly as it is,
@@ -16,6 +17,8 @@ public final class Inventory {
     }
 
     public static InventoryService create(Clock clock, StockAlertListener alertListener) {
-        return new DefaultInventoryService(new InMemoryInventoryStore(), CategoryPolicies.defaults(), clock);
+        Objects.requireNonNull(clock, "clock");
+        Objects.requireNonNull(alertListener, "alertListener");
+        return new DefaultInventoryService(new InMemoryInventoryStore(), CategoryPolicies.defaults(), clock, alertListener);
     }
 }
