@@ -16,6 +16,12 @@ Supuestos, alcance y pendientes del servicio de reservas. Se actualiza en cada f
 - SKU vacío o categoría nula en `registerProduct` lanzan `IllegalArgumentException`.
 - Un producto registrado empieza con 0 unidades. Un producto desconocido tiene 0 disponibles (contrato).
 
+### Reservas
+- **Orden de validación en `reserve`:** datos inválidos (`IllegalArgumentException`) → límite de la categoría (`OrderLimitExceededException`) → stock (`InsufficientStockException`). El límite va antes que el stock porque es una regla del pedido, no del momento.
+- **Reintentos idempotentes por `orderId`:** la app reenvía el pedido si la conexión es lenta. Un reenvío con el mismo SKU y cantidad devuelve la reserva existente, aunque ya no quede stock.
+- **Un `orderId` reutilizado para otro SKU u otra cantidad** lanza `IllegalArgumentException`: no es un reintento, es otro pedido con el mismo id.
+- **El vínculo pedido → SKU se guarda antes de validar el stock** y no se borra si la reserva falla. Así un reintento concurrente nunca pierde el índice que usa `confirm`. Costo: un `orderId` que falló por stock queda atado a ese SKU (la app genera un id por producto, así que no debería importar).
+
 ## Fuera de alcance
 
 _Se completa en la release._
