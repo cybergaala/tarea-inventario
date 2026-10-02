@@ -1,0 +1,42 @@
+name: Business rule change
+description: New category, different payment window or order limit, new alert channel, etc.
+title: "feat: "
+labels: [enhancement]
+body:
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Type of change
+      options:
+        - New product category
+        - Change to an existing category
+        - Low stock alert (threshold or channel)
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: category
+    attributes:
+      label: Category
+      placeholder: e.g. BLACK_FRIDAY
+  - type: input
+    id: payment-window
+    attributes:
+      label: Payment window
+      placeholder: e.g. 10 minutes
+  - type: input
+    id: order-limit
+    attributes:
+      label: Units per order limit
+      placeholder: e.g. 3, or "no limit"
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Why the change is needed and from which date it applies.
+    validations:
+      required: true
+  - type: markdown
+    attributes:
+      value: |
+        Developer note: category rules live in `CategoryPolicies.defaults()`; `CategoryPoliciesTest` fails if a category has no policy.
