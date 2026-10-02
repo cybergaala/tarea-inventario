@@ -22,6 +22,12 @@ Supuestos, alcance y pendientes del servicio de reservas. Se actualiza en cada f
 - **Un `orderId` reutilizado para otro SKU u otra cantidad** lanza `IllegalArgumentException`: no es un reintento, es otro pedido con el mismo id.
 - **El vínculo pedido → SKU se guarda antes de validar el stock** y no se borra si la reserva falla. Así un reintento concurrente nunca pierde el índice que usa `confirm`. Costo: un `orderId` que falló por stock queda atado a ese SKU (la app genera un id por producto, así que no debería importar).
 
+### Expiración
+- **Sin schedulers:** las reservas vencidas se liberan de forma perezosa al inicio de cada operación del producto, con la hora del `Clock` inyectado. El resultado observable es el mismo que con un job, sin hilos extra ni carreras con él, y los tests controlan el tiempo con `MutableClock`.
+- **Límite exacto:** una reserva está activa mientras `now < expiresAt`. En `expiresAt` ya está liberada.
+- **Cola por vencimiento** (`PriorityQueue`): liberar cuesta O(log n) por reserva vencida, no recorrer todas las reservas en cada llamada.
+- **Reintento después de vencer:** crea una reserva nueva si hay stock. La anterior ya no existe; tratar el reintento como pedido nuevo es lo menos sorprendente.
+
 ## Fuera de alcance
 
 _Se completa en la release._
